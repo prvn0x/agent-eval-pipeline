@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     self_updater_min_occurrences: int = 3
     annotation_auto_label_threshold: float = 0.7
+    sync_eval: bool = False  # skip Celery; run evaluation inline (used on Render)
 
     model_config = SettingsConfigDict(
         env_file=".env",
