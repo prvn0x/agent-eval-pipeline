@@ -36,11 +36,17 @@ class LLMJudgeEvaluator(BaseEvaluator):
         return "llm_judge"
 
     async def evaluate(self, conversation: ConversationCreate) -> EvaluatorResult:
+        if not self._settings.llm_enabled:
+            return EvaluatorResult(evaluator_name=self.name, score=None)
+
         cache = Redis.from_url(self._settings.redis_url, decode_responses=True)
 
         try:
             cache_key = f"llm_judge:{conversation.conversation_id}:{self._settings.ollama_model}"
-            cached = await cache.get(cache_key)
+            try:
+                cached = await cache.get(cache_key)
+            except Exception:
+                cached = None
             if cached:
                 data = json.loads(cached)
                 return EvaluatorResult(
@@ -73,11 +79,14 @@ class LLMJudgeEvaluator(BaseEvaluator):
 
             meta = {"quality": quality, "helpfulness": helpfulness, "factuality": factuality}
 
-            await cache.setex(
-                cache_key,
-                self._settings.llm_cache_ttl_seconds,
-                json.dumps({"score": overall, "metadata": meta}),
-            )
+            try:
+                await cache.setex(
+                    cache_key,
+                    self._settings.llm_cache_ttl_seconds,
+                    json.dumps({"score": overall, "metadata": meta}),
+                )
+            except Exception:
+                pass
 
             return EvaluatorResult(evaluator_name=self.name, score=overall, metadata=meta)
         finally:

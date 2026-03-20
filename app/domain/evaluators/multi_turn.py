@@ -35,6 +35,9 @@ class MultiTurnEvaluator(BaseEvaluator):
         return "multi_turn"
 
     async def evaluate(self, conversation: ConversationCreate) -> EvaluatorResult:
+        if not self._settings.llm_enabled:
+            return EvaluatorResult(evaluator_name=self.name, score=None)
+
         if len(conversation.turns) < 3:
             return EvaluatorResult(evaluator_name=self.name, score=None)
 
