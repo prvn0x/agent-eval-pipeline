@@ -9,6 +9,8 @@ from app.db.repositories.evaluation_repository import EvaluationRepository
 from app.domain.evaluators.base import BaseEvaluator, EvaluatorResult
 from app.domain.evaluators.heuristic import HeuristicEvaluator
 from app.domain.evaluators.llm_judge import LLMJudgeEvaluator
+from app.domain.evaluators.multi_turn import MultiTurnEvaluator
+from app.domain.evaluators.tool_call import ToolCallEvaluator
 from app.schemas.conversation import ConversationCreate
 
 
@@ -19,6 +21,8 @@ class EvaluationService:
         self._evaluators: list[BaseEvaluator] = [
             HeuristicEvaluator(),
             LLMJudgeEvaluator(),
+            ToolCallEvaluator(),
+            MultiTurnEvaluator(),
         ]
 
     async def run(self, conversation_id: str) -> Evaluation:
@@ -49,20 +53,28 @@ class EvaluationService:
 
         heuristic = next((r for r in results if r.evaluator_name == "heuristic"), None)
         llm = next((r for r in results if r.evaluator_name == "llm_judge"), None)
-        tool_meta = heuristic.metadata if heuristic else {}
+        tool = next((r for r in results if r.evaluator_name == "tool_call"), None)
+        multi = next((r for r in results if r.evaluator_name == "multi_turn"), None)
+
+        tool_meta = tool.metadata if tool and tool.metadata else {}
+        heuristic_meta = heuristic.metadata if heuristic else {}
 
         evaluation = Evaluation(
             id=f"eval_{uuid.uuid4().hex[:8]}",
             conversation_id=conversation_id,
             overall_score=overall_score,
             response_quality=llm.metadata.get("quality") if llm and llm.metadata else None,
+            tool_accuracy=tool.score if tool else None,
+            coherence=multi.score if multi else None,
             issues_detected=[i.model_dump() for i in all_issues],
             improvement_suggestions=[s.model_dump() for s in all_suggestions],
             evaluator_scores={r.evaluator_name: r.score for r in results},
             tool_evaluation={
-                "execution_success": tool_meta.get("tool_failures", 0) == 0,
-                "total_tools": tool_meta.get("total_tools", 0),
-                "tool_failures": tool_meta.get("tool_failures", 0),
+                "execution_success": tool_meta.get("execution_success", heuristic_meta.get("tool_failures", 0) == 0),
+                "total_tools": tool_meta.get("total_calls", heuristic_meta.get("total_tools", 0)),
+                "tool_failures": tool_meta.get("failed_calls", heuristic_meta.get("tool_failures", 0)),
+                "selection_accuracy": tool_meta.get("selection_accuracy"),
+                "parameter_accuracy": tool_meta.get("parameter_accuracy"),
             },
         )
 

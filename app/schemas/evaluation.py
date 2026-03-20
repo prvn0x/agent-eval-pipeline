@@ -1,16 +1,17 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 
 class IssueDetected(BaseModel):
-    type: str        # "latency" | "format" | "tool_failure" | "mission_incomplete"
-    severity: str    # "warning" | "critical"
+    type: Literal["latency", "format", "tool_failure", "mission_incomplete", "parameter_hallucination", "coherence"]
+    severity: Literal["warning", "critical"]
     description: str
 
 
 class ImprovementSuggestion(BaseModel):
-    type: str        # "prompt" | "tool"
+    type: Literal["prompt", "tool"]
     suggestion: str
     rationale: str
     confidence: float
