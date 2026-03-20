@@ -38,7 +38,27 @@ def evaluate_conversation(self, conversation_id: str) -> dict:
 
 @celery_app.task(name="app.worker.tasks.run_self_updater", bind=True, max_retries=3)
 def run_self_updater(self, agent_version: str) -> dict:
-    return {"agent_version": agent_version, "status": "pending"}
+    async def _run() -> dict:
+        from app.db.session import AsyncSessionLocal
+        from app.services.self_updater_service import SelfUpdaterService
+
+        async with AsyncSessionLocal() as session:
+            service = SelfUpdaterService(session)
+            saved = await service.run(agent_version)
+            await session.commit()
+            return {"agent_version": agent_version, "suggestions_saved": saved, "status": "completed"}
+
+    try:
+        return asyncio.run(_run())
+    except Retry:
+        raise
+    except _RETRYABLE_EXCEPTIONS as exc:
+        logger.warning("Transient error in self-updater for %s (attempt %d): %s",
+                       agent_version, self.request.retries + 1, exc)
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+    except Exception as exc:
+        logger.error("Self-updater failed for %s: %s", agent_version, exc, exc_info=True)
+        raise
 
 
 @celery_app.task(name="app.worker.tasks.run_meta_eval", bind=True, max_retries=3)
