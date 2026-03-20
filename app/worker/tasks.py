@@ -63,4 +63,23 @@ def run_self_updater(self, agent_version: str) -> dict:
 
 @celery_app.task(name="app.worker.tasks.run_meta_eval", bind=True, max_retries=3)
 def run_meta_eval(self) -> dict:
-    return {"status": "pending"}
+    async def _run() -> dict:
+        from app.db.session import AsyncSessionLocal
+        from app.services.meta_eval_service import MetaEvalService
+
+        async with AsyncSessionLocal() as session:
+            service = MetaEvalService(session)
+            result = await service.run()
+            await session.commit()
+            return {"conversations_analyzed": result.conversations_analyzed, "status": "completed"}
+
+    try:
+        return asyncio.run(_run())
+    except Retry:
+        raise
+    except _RETRYABLE_EXCEPTIONS as exc:
+        logger.warning("Transient error in meta-eval (attempt %d): %s", self.request.retries + 1, exc)
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+    except Exception as exc:
+        logger.error("Meta-eval failed: %s", exc, exc_info=True)
+        raise
