@@ -8,6 +8,7 @@ from app.db.repositories.conversation_repository import ConversationRepository
 from app.db.repositories.evaluation_repository import EvaluationRepository
 from app.domain.evaluators.base import BaseEvaluator, EvaluatorResult
 from app.domain.evaluators.heuristic import HeuristicEvaluator
+from app.domain.evaluators.llm_judge import LLMJudgeEvaluator
 from app.schemas.conversation import ConversationCreate
 
 
@@ -17,6 +18,7 @@ class EvaluationService:
         self._eval_repo = EvaluationRepository(session)
         self._evaluators: list[BaseEvaluator] = [
             HeuristicEvaluator(),
+            LLMJudgeEvaluator(),
         ]
 
     async def run(self, conversation_id: str) -> Evaluation:
@@ -46,12 +48,14 @@ class EvaluationService:
         all_suggestions = [s for r in results for s in r.suggestions]
 
         heuristic = next((r for r in results if r.evaluator_name == "heuristic"), None)
+        llm = next((r for r in results if r.evaluator_name == "llm_judge"), None)
         tool_meta = heuristic.metadata if heuristic else {}
 
         evaluation = Evaluation(
             id=f"eval_{uuid.uuid4().hex[:8]}",
             conversation_id=conversation_id,
             overall_score=overall_score,
+            response_quality=llm.metadata.get("quality") if llm and llm.metadata else None,
             issues_detected=[i.model_dump() for i in all_issues],
             improvement_suggestions=[s.model_dump() for s in all_suggestions],
             evaluator_scores={r.evaluator_name: r.score for r in results},
