@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Float, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -14,6 +14,8 @@ class ImprovementSuggestion(Base):
     pattern_type: Mapped[str] = mapped_column(String, nullable=False)
     pattern_summary: Mapped[str] = mapped_column(Text, nullable=False)
     suggestion_text: Mapped[str] = mapped_column(Text, nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     category: Mapped[str] = mapped_column(String, nullable=False)  # prompt | tool | training
     occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

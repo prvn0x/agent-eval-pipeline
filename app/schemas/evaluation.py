@@ -5,13 +5,13 @@ from pydantic import BaseModel
 
 
 class IssueDetected(BaseModel):
-    type: Literal["latency", "format", "tool_failure", "mission_incomplete", "parameter_hallucination", "coherence"]
+    type: str
     severity: Literal["warning", "critical"]
     description: str
 
 
 class ImprovementSuggestion(BaseModel):
-    type: Literal["prompt", "tool"]
+    type: Literal["prompt", "tool", "training"]
     suggestion: str
     rationale: str
     confidence: float

@@ -11,7 +11,7 @@ Live API: **https://agent-eval-pipeline.onrender.com/docs**
 Most agent teams eyeball conversation logs or run ad-hoc spot checks. This pipeline makes evaluation systematic:
 
 1. **Ingest** — POST a conversation log (turns, tool calls, metadata)
-2. **Evaluate** — four evaluators run in parallel and produce a scored report
+2. **Evaluate** — four evaluators run in sequence and produce a scored report
 3. **Annotate** — human reviewers label turns; Cohen's Kappa measures inter-annotator agreement and routes conversations to auto-label or human review
 4. **Self-update** — the system scans evaluations for recurring failure patterns and generates concrete improvement suggestions (prompt fixes, tool schema changes, training flags)
 5. **Meta-evaluate** — calibrates each evaluator against human labels to surface blind spots and drift
@@ -42,6 +42,8 @@ Most agent teams eyeball conversation logs or run ad-hoc spot checks. This pipel
 | GET | `/suggestions` | List improvement suggestions |
 | POST | `/meta-eval/run` | Run evaluator calibration |
 | GET | `/meta-eval/latest` | Latest calibration report |
+| POST | `/regressions/check` | Run regression check across all agent versions |
+| GET | `/regressions` | List regression alerts |
 | GET | `/health` | Health check |
 
 Full schema at `/docs` (Swagger) or `/redoc`.
@@ -71,6 +73,8 @@ ConversationService ──► Celery task (async) ──► EvaluationService
 POST /feedback/{id} ──► FeedbackService ──► Cohen's Kappa ──► routing decision
 POST /suggestions/trigger ──► pattern detection ──► Ollama suggestions
 POST /meta-eval/run ──► calibrate evaluators vs human annotations
+POST /regressions/check ──► RegressionService ──► alert if failure rate > 20%
+Celery beat (every 5 min) ──► auto regression check
 ```
 
 **Stack:** Python 3.11, FastAPI, SQLAlchemy 2.0 (async), PostgreSQL, Redis, Celery, Ollama (llama3.2), Docker
@@ -131,6 +135,20 @@ curl -X POST http://localhost:8000/conversations \
 # fetch the evaluation
 curl http://localhost:8000/evaluations/conv_001
 ```
+
+---
+
+## Trade-offs
+
+**Ollama over hosted LLM APIs** — Zero cost, runs locally, no data leaves the machine. Trade-off: no Ollama on Render means LLM evaluators are disabled on the hosted demo. Heuristic and tool evaluators still run. In production this would be replaced with a self-hosted model endpoint or a paid API.
+
+**Sync eval on Render (`SYNC_EVAL=true`) over a hosted Redis/Celery stack** — Keeps the free-tier deploy simple with no external dependencies. Trade-off: evaluations block the HTTP request (~1–3s). Acceptable for a demo; in production the async Celery path is the default.
+
+**Sequential evaluators over `asyncio.gather`** — Simpler error isolation — one evaluator failing doesn't cancel others. Trade-off: ~2–4x slower than parallel execution. Straightforward to switch to `asyncio.gather` when throughput matters.
+
+**Cohen's Kappa for agreement** — Standard metric, interpretable thresholds (0.61 = strong, 0.81 = perfect). Trade-off: only computes for exactly 2 annotators in the current implementation. Fleiss' Kappa would handle N annotators but adds complexity for marginal gain at this stage.
+
+**`create_all` on startup over Alembic** — Zero setup for the demo — tables are created automatically. Trade-off: can't apply additive migrations to existing tables (e.g. new columns on Render require a manual table drop or Alembic). First thing to replace before going to production.
 
 ---
 

@@ -8,14 +8,17 @@ from app.domain.self_updater.pattern_detector import FailurePattern
 
 logger = logging.getLogger(__name__)
 
-_FALLBACK_RULES: dict[str, tuple[str, str]] = {
-    "hallucinated_parameter": ("tool", "Tighten parameter schemas; reject calls with undeclared keys."),
-    "tool_not_called": ("prompt", "Add explicit tool-use examples to the system prompt."),
-    "parameter_error": ("tool", "Add stricter JSON schema validation for tool inputs."),
-    "empty_response": ("prompt", "Add a fallback instruction: never return an empty reply."),
-    "mission_incomplete": ("training", "Flag for RLHF: reward completion of stated user goal."),
-    "context_lost": ("prompt", "Inject a context-summary block at the start of each system prompt."),
-    "contradicts_previous": ("training", "Flag contradictory turns for fine-tuning on consistency."),
+_FALLBACK_RULES: dict[str, tuple[str, str, str, float]] = {
+    "hallucinated_parameter": ("tool", "Tighten parameter schemas; reject calls with undeclared keys.", "Hallucinated parameters introduce incorrect data into tool calls, causing downstream failures.", 0.85),
+    "tool_not_called": ("prompt", "Add explicit tool-use examples to the system prompt.", "Agents skip tool calls when the prompt lacks clear triggering examples.", 0.80),
+    "parameter_error": ("tool", "Add stricter JSON schema validation for tool inputs.", "Malformed parameters fail silently without schema enforcement.", 0.82),
+    "empty_response": ("prompt", "Add a fallback instruction: never return an empty reply.", "Empty responses break user experience and indicate missing fallback handling.", 0.90),
+    "mission_incomplete": ("training", "Flag for RLHF: reward completion of stated user goal.", "Agent consistently abandons goals mid-conversation, indicating reward misalignment.", 0.75),
+    "context_lost": ("prompt", "Inject a context-summary block at the start of each system prompt.", "Long conversations cause context window truncation, losing early user preferences.", 0.78),
+    "contradicts_previous": ("training", "Flag contradictory turns for fine-tuning on consistency.", "Self-contradictions erode user trust and indicate poor context retention.", 0.72),
+    "format": ("prompt", "Add output format examples to the system prompt covering edge cases.", "Format failures indicate the agent lacks clear formatting constraints.", 0.70),
+    "latency": ("tool", "Add timeout constraints and caching for slow tool calls.", "High latency degrades user experience and may indicate missing optimisations.", 0.75),
+    "parameter_hallucination": ("tool", "Tighten tool parameter schemas; add grounding validation to reject parameters not found in context.", "Parameters are being inferred without grounding in user utterances, causing incorrect tool calls.", 0.88),
 }
 
 _PROMPT = """You are a senior AI systems engineer reviewing failure patterns in an AI agent.
@@ -28,7 +31,9 @@ For each pattern, generate one actionable improvement suggestion. Respond with O
   {{
     "pattern_type": "<pattern_type>",
     "category": "prompt|tool|training",
-    "suggestion": "<one concrete, actionable recommendation>"
+    "suggestion": "<one concrete, actionable recommendation>",
+    "rationale": "<why this fix addresses the root cause>",
+    "confidence": <float between 0.0 and 1.0 indicating how confident you are this fix will help>
   }}
 ]
 
@@ -36,7 +41,8 @@ Rules:
 - category "prompt" = fix the system prompt or few-shot examples
 - category "tool" = fix tool definitions, parameter schemas, or selection logic
 - category "training" = flag for fine-tuning or RLHF
-- Be specific. No vague advice."""
+- Be specific. No vague advice.
+- confidence should reflect how directly the fix addresses the observed pattern."""
 
 
 async def generate_suggestions(
@@ -73,10 +79,19 @@ async def generate_suggestions(
 def _fallback_suggestions(patterns: list[FailurePattern]) -> list[dict]:
     result = []
     for p in patterns:
-        category, suggestion = _FALLBACK_RULES.get(p.pattern_type, ("training", "Review failures manually."))
+        rule = _FALLBACK_RULES.get(p.pattern_type)
+        if rule:
+            category, suggestion, rationale, confidence = rule
+        else:
+            category, suggestion, rationale, confidence = (
+                "training", "Review failures manually.",
+                "Pattern not recognised; manual review needed to determine root cause.", 0.50,
+            )
         result.append({
             "pattern_type": p.pattern_type,
             "category": category,
             "suggestion": suggestion,
+            "rationale": rationale,
+            "confidence": confidence,
         })
     return result

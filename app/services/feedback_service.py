@@ -22,7 +22,7 @@ class FeedbackService:
             annotations=[a.model_dump() for a in payload.annotations],
         )
         await self._repo.save_annotation(record)
-        await self._recompute_agreement(conversation_id)
+        await self.recompute_agreement(conversation_id)
 
         return FeedbackResponse(
             conversation_id=conversation_id,
@@ -44,19 +44,18 @@ class FeedbackService:
             label_distribution=record.label_distribution,
         )
 
-    async def _recompute_agreement(self, conversation_id: str) -> None:
+    async def recompute_agreement(self, conversation_id: str) -> None:
+        from collections import Counter
         all_records = await self._repo.get_annotations_for_conversation(conversation_id)
         if len(all_records) < 2:
             return
 
-        all_labels = [
-            ann["label"]
-            for record in all_records
-            for ann in record.annotations
-        ]
-
-        from collections import Counter
+        all_annotations = [ann for record in all_records for ann in record.annotations]
+        all_labels = [ann["label"] for ann in all_annotations]
         distribution = dict(Counter(all_labels))
+
+        confidences = [ann.get("confidence", 1.0) for ann in all_annotations]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 1.0
 
         if len(all_records) == 2:
             labels_a = [a["label"] for a in all_records[0].annotations]
@@ -65,7 +64,7 @@ class FeedbackService:
         else:
             kappa = None
 
-        decision = routing_decision(kappa, self._settings.annotation_auto_label_threshold)
+        decision = routing_decision(kappa, self._settings.annotation_auto_label_threshold, avg_confidence)
 
         agreement = AgreementRecord(
             id=f"agr_{uuid.uuid4().hex[:8]}",

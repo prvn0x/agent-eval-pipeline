@@ -47,6 +47,8 @@ class SelfUpdaterService:
                 pattern_type=pattern.pattern_type,
                 pattern_summary="; ".join(pattern.example_issues) if pattern.example_issues else pattern.pattern_type,
                 suggestion_text=item.get("suggestion", ""),
+                rationale=item.get("rationale"),
+                confidence=item.get("confidence"),
                 category=item.get("category", "training"),
                 occurrence_count=pattern.occurrences,
             )
@@ -68,6 +70,8 @@ class SelfUpdaterService:
                 pattern_type=r.pattern_type,
                 pattern_summary=r.pattern_summary,
                 suggestion_text=r.suggestion_text,
+                rationale=r.rationale,
+                confidence=r.confidence,
                 category=r.category,
                 occurrence_count=r.occurrence_count,
                 created_at=r.created_at,

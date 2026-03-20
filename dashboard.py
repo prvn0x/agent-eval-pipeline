@@ -221,6 +221,12 @@ elif page == "Improvement Suggestions":
         for s in data["suggestions"]:
             with st.expander(f"{category_colors.get(s['category'], '⬜')} [{s['category'].upper()}] {s['pattern_type']} — {s['occurrence_count']}x occurrences"):
                 st.markdown(f"**Suggestion:** {s['suggestion_text']}")
+                if s.get("rationale"):
+                    st.markdown(f"**Rationale:** {s['rationale']}")
+                col1, col2 = st.columns(2)
+                if s.get("confidence") is not None:
+                    col1.metric("Confidence", f"{s['confidence']:.0%}")
+                col2.metric("Occurrences", s["occurrence_count"])
                 st.markdown(f"**Pattern summary:** {s['pattern_summary']}")
                 st.caption(f"ID: {s['id']} · Generated: {s['created_at'][:10]}")
     elif data:
@@ -253,15 +259,25 @@ elif page == "Meta-Evaluation":
         calibration = data.get("evaluator_calibration") or []
         if calibration:
             st.subheader("Evaluator Calibration")
-            df = pd.DataFrame(calibration)
-            df.columns = ["Evaluator", "Samples", "Agreement Rate", "False Positive Rate", "False Negative Rate"]
+            df = pd.DataFrame([{
+                "Evaluator": c["evaluator"],
+                "Samples": c["sample_count"],
+                "Agreement": c["agreement_rate"],
+                "Precision": c.get("precision"),
+                "Recall": c.get("recall"),
+                "F1": c.get("f1"),
+                "FPR": c["false_positive_rate"],
+                "FNR": c["false_negative_rate"],
+            } for c in calibration])
             st.dataframe(df, use_container_width=True, hide_index=True)
 
             # Bar chart
             fig = go.Figure()
-            fig.add_trace(go.Bar(name="Agreement Rate", x=df["Evaluator"], y=df["Agreement Rate"], marker_color="#4F8BF9"))
-            fig.add_trace(go.Bar(name="False Negative Rate", x=df["Evaluator"], y=df["False Negative Rate"], marker_color="#FF6B6B"))
-            fig.update_layout(barmode="group", height=300, margin=dict(l=20, r=20, t=20, b=20))
+            fig.add_trace(go.Bar(name="Precision", x=df["Evaluator"], y=df["Precision"], marker_color="#4F8BF9"))
+            fig.add_trace(go.Bar(name="Recall", x=df["Evaluator"], y=df["Recall"], marker_color="#51CF66"))
+            fig.add_trace(go.Bar(name="F1", x=df["Evaluator"], y=df["F1"], marker_color="#FCC419"))
+            fig.add_trace(go.Bar(name="FNR", x=df["Evaluator"], y=df["FNR"], marker_color="#FF6B6B"))
+            fig.update_layout(barmode="group", height=320, margin=dict(l=20, r=20, t=20, b=20))
             st.plotly_chart(fig, use_container_width=True)
 
         # Blind spots

@@ -63,6 +63,16 @@ class HeuristicEvaluator(BaseEvaluator):
             ))
             score -= 0.2
 
+        if conversation.feedback and conversation.feedback.user_rating is not None:
+            rating = conversation.feedback.user_rating
+            if rating <= 2:
+                issues.append(IssueDetected(
+                    type="low_user_rating",
+                    severity="warning",
+                    description=f"User rated this conversation {rating}/5 — indicates poor experience",
+                ))
+                score -= 0.2
+
         return EvaluatorResult(
             evaluator_name=self.name,
             score=max(0.0, round(score, 2)),

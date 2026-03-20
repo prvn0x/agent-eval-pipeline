@@ -32,7 +32,7 @@ def kappa_to_level(kappa: float | None) -> str:
     return "poor"
 
 
-def routing_decision(kappa: float | None, threshold: float) -> str:
-    if kappa is not None and kappa >= threshold:
+def routing_decision(kappa: float | None, threshold: float, avg_confidence: float = 1.0) -> str:
+    if kappa is not None and kappa >= threshold and avg_confidence >= 0.6:
         return "auto_label"
     return "human_review"

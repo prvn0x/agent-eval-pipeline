@@ -83,3 +83,27 @@ def run_meta_eval(self) -> dict:
     except Exception as exc:
         logger.error("Meta-eval failed: %s", exc, exc_info=True)
         raise
+
+
+@celery_app.task(name="app.worker.tasks.check_regressions", bind=True, max_retries=3)
+def check_regressions(self) -> dict:
+    async def _run() -> dict:
+        from app.db.session import AsyncSessionLocal
+        from app.services.regression_service import RegressionService
+
+        async with AsyncSessionLocal() as session:
+            service = RegressionService(session)
+            alerts = await service.check_all_versions()
+            await session.commit()
+            return {"alerts_fired": len(alerts), "status": "completed"}
+
+    try:
+        return asyncio.run(_run())
+    except Retry:
+        raise
+    except _RETRYABLE_EXCEPTIONS as exc:
+        logger.warning("Transient error in regression check (attempt %d): %s", self.request.retries + 1, exc)
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+    except Exception as exc:
+        logger.error("Regression check failed: %s", exc, exc_info=True)
+        raise

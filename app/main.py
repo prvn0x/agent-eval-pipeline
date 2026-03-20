@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.db.session import engine, Base
 import app.db.models  # noqa: F401
-from app.api.routes import conversations, evaluations, feedback, suggestions, meta_eval
+from app.api.routes import conversations, evaluations, feedback, suggestions, meta_eval, regressions
 
 settings = get_settings()
 
@@ -40,6 +40,7 @@ app.include_router(evaluations.router)
 app.include_router(feedback.router)
 app.include_router(suggestions.router)
 app.include_router(meta_eval.router)
+app.include_router(regressions.router)
 
 
 @app.get("/health", tags=["Health"])

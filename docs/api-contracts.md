@@ -73,10 +73,13 @@ Fetch evaluation report for a conversation.
 {
   "evaluation_id": "eval_abc12345",
   "conversation_id": "conv_abc123",
-  "overall_score": 0.87,
-  "response_quality": 0.90,
-  "tool_accuracy": 0.95,
-  "coherence": 0.85,
+  "status": "COMPLETED",
+  "scores": {
+    "overall": 0.87,
+    "response_quality": 0.90,
+    "tool_accuracy": 0.95,
+    "coherence": 0.85
+  },
   "tool_evaluation": {
     "execution_success": true,
     "total_tools": 1,
@@ -91,13 +94,14 @@ Fetch evaluation report for a conversation.
       "description": "Tool 'search_flights' has parameters not grounded in conversation: date"
     }
   ],
-  "improvement_suggestions": [],
-  "evaluator_scores": {
-    "heuristic": 0.75,
-    "llm_judge": 0.90,
-    "tool_call": 0.95,
-    "multi_turn": 0.88
-  },
+  "improvement_suggestions": [
+    {
+      "type": "prompt",
+      "suggestion": "Add explicit instruction to extract 'date' from user input before calling 'search_flights'",
+      "rationale": "Parameters were not mentioned in the conversation context",
+      "confidence": 0.7
+    }
+  ],
   "created_at": "2025-01-15T10:00:05Z"
 }
 ```
@@ -183,6 +187,8 @@ List improvement suggestions. `agent_version` is optional.
       "pattern_type": "parameter_hallucination",
       "pattern_summary": "Tool 'search_flights' has parameters not grounded in conversation: date",
       "suggestion_text": "Tighten parameter schemas; reject calls with undeclared keys.",
+      "rationale": "Parameters are being inferred without grounding in user utterances, causing incorrect tool calls.",
+      "confidence": 0.88,
       "category": "tool",
       "occurrence_count": 5,
       "created_at": "2025-01-15T10:00:00Z"
@@ -210,6 +216,9 @@ Run evaluator calibration against human annotations. Persists the report and ret
       "evaluator": "llm_judge",
       "sample_count": 10,
       "agreement_rate": 0.90,
+      "precision": 0.85,
+      "recall": 0.78,
+      "f1": 0.81,
       "false_positive_rate": 0.05,
       "false_negative_rate": 0.10
     }
@@ -229,6 +238,35 @@ Run evaluator calibration against human annotations. Persists the report and ret
 Fetch the most recent calibration report.
 
 **Response:** `200 OK` — same schema as above. `404` if no report exists yet.
+
+---
+
+## Regressions
+
+### POST /regressions/check
+Run regression check across all agent versions. Fires an alert if failure rate exceeds 20% in the last 50 evaluations. Respects a 10-minute cooldown per version to avoid duplicate alerts. Also runs automatically via Celery beat every 5 minutes.
+
+**Response:** `200 OK`
+```json
+{
+  "total": 1,
+  "alerts": [
+    {
+      "id": "reg_abc12345",
+      "agent_version": "v1.0",
+      "failure_rate": 0.35,
+      "window_size": 50,
+      "threshold": 0.2,
+      "created_at": "2025-01-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+### GET /regressions?agent_version=v1.0
+List all regression alerts, optionally filtered by agent version.
+
+**Response:** `200 OK` — same schema as above.
 
 ---
 

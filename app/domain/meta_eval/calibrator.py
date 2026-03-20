@@ -16,7 +16,7 @@ def calibrate(conversations: list[dict]) -> CalibrationResult:
     if not conversations:
         return CalibrationResult(0, 0.0, [], [])
 
-    # {evaluator_name: {tp, tn, fp, fn}}
+    # {evaluator_name: {tp, tn, fp, fn}} — positive class = conversation has issues (human_review)
     ev_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"tp": 0, "tn": 0, "fp": 0, "fn": 0})
     overall_matches = 0
 
@@ -28,12 +28,17 @@ def calibrate(conversations: list[dict]) -> CalibrationResult:
         agreement = conv["agreement"]
         annotation_types: list[str] = conv["annotation_types"]
 
-        human_pass = agreement.routing_decision == "auto_label"
-        evaluator_pass = (
-            evaluation.overall_score is not None
-            and evaluation.overall_score >= _PASS_THRESHOLD
+        # human_review routing OR low user_rating (≤2) = conversation has issues (positive)
+        user_rating = conv.get("user_rating")
+        human_positive = (
+            agreement.routing_decision == "human_review"
+            or (user_rating is not None and user_rating <= 2)
         )
-        if human_pass == evaluator_pass:
+        evaluator_positive = (
+            evaluation.overall_score is None
+            or evaluation.overall_score < _PASS_THRESHOLD
+        )
+        if human_positive == evaluator_positive:
             overall_matches += 1
 
         evaluator_issue_types = {
@@ -41,15 +46,15 @@ def calibrate(conversations: list[dict]) -> CalibrationResult:
         }
 
         for name, score in (evaluation.evaluator_scores or {}).items():
-            ev_pass = score is not None and score >= _PASS_THRESHOLD
-            if human_pass and ev_pass:
-                ev_stats[name]["tp"] += 1
-            elif not human_pass and not ev_pass:
-                ev_stats[name]["tn"] += 1
-            elif not human_pass and ev_pass:
-                ev_stats[name]["fn"] += 1  # missed issue human caught
+            ev_pos = score is None or score < _PASS_THRESHOLD
+            if human_positive and ev_pos:
+                ev_stats[name]["tp"] += 1  # both agree: issues present
+            elif not human_positive and not ev_pos:
+                ev_stats[name]["tn"] += 1  # both agree: no issues
+            elif not human_positive and ev_pos:
+                ev_stats[name]["fp"] += 1  # evaluator flags issue, human says fine
             else:
-                ev_stats[name]["fp"] += 1  # flagged when human was fine
+                ev_stats[name]["fn"] += 1  # evaluator misses issue human caught
 
         for atype in annotation_types:
             human_type_counts[atype] += 1
@@ -62,12 +67,21 @@ def calibrate(conversations: list[dict]) -> CalibrationResult:
     for name, s in ev_stats.items():
         total = s["tp"] + s["tn"] + s["fp"] + s["fn"]
         agreement_rate = round((s["tp"] + s["tn"]) / total, 3) if total else 0.0
-        fpr = round(s["fp"] / (s["fp"] + s["tp"]) if (s["fp"] + s["tp"]) else 0.0, 3)
-        fnr = round(s["fn"] / (s["fn"] + s["tn"]) if (s["fn"] + s["tn"]) else 0.0, 3)
+
+        precision = round(s["tp"] / (s["tp"] + s["fp"]), 3) if (s["tp"] + s["fp"]) else 0.0
+        recall = round(s["tp"] / (s["tp"] + s["fn"]), 3) if (s["tp"] + s["fn"]) else 0.0
+        f1 = round(2 * precision * recall / (precision + recall), 3) if (precision + recall) else 0.0
+
+        fpr = round(s["fp"] / (s["fp"] + s["tn"]), 3) if (s["fp"] + s["tn"]) else 0.0
+        fnr = round(s["fn"] / (s["fn"] + s["tp"]), 3) if (s["fn"] + s["tp"]) else 0.0
+
         calibration.append({
             "evaluator": name,
             "sample_count": total,
             "agreement_rate": agreement_rate,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
             "false_positive_rate": fpr,
             "false_negative_rate": fnr,
         })

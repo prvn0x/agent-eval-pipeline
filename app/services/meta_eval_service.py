@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.conversation import Conversation
 from app.db.models.evaluation import Evaluation
 from app.db.models.feedback import AnnotationRecord, AgreementRecord
 from app.db.models.meta_eval import MetaEvalReport
@@ -69,11 +70,20 @@ class MetaEvalService:
                 if item.get("type"):
                     annotation_types[cid].append(item["type"])
 
+        conv_rows = await self._session.execute(
+            select(Conversation).where(Conversation.id.in_(conv_ids))
+        )
+        user_ratings: dict[str, int | None] = {
+            c.id: (c.feedback or {}).get("user_rating")
+            for c in conv_rows.scalars().all()
+        }
+
         return [
             {
                 "evaluation": evaluations[cid],
                 "agreement": agreement,
                 "annotation_types": annotation_types.get(cid, []),
+                "user_rating": user_ratings.get(cid),
             }
             for cid, agreement in agreements.items()
             if cid in evaluations

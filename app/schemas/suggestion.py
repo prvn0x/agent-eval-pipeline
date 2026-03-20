@@ -10,6 +10,8 @@ class SuggestionItem(BaseModel):
     pattern_type: str
     pattern_summary: str
     suggestion_text: str
+    rationale: str | None
+    confidence: float | None
     category: Literal["prompt", "tool", "training"]
     occurrence_count: int
     created_at: datetime

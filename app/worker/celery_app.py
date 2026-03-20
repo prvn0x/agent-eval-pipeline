@@ -24,5 +24,12 @@ celery_app.conf.update(
         "app.worker.tasks.evaluate_conversation": {"queue": "evaluations"},
         "app.worker.tasks.run_self_updater": {"queue": "self_updater"},
         "app.worker.tasks.run_meta_eval": {"queue": "meta_eval"},
+        "app.worker.tasks.check_regressions": {"queue": "meta_eval"},
+    },
+    beat_schedule={
+        "check-regressions-every-5-minutes": {
+            "task": "app.worker.tasks.check_regressions",
+            "schedule": 300.0,  # every 5 minutes
+        },
     },
 )

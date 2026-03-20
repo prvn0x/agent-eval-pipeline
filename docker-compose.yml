@@ -56,5 +56,17 @@ services:
       --queues=evaluations,self_updater,meta_eval
       --concurrency=4
 
+  beat:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: celery -A app.worker.celery_app beat --loglevel=info
+
 volumes:
   postgres_data:

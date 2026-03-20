@@ -7,8 +7,11 @@ class EvaluatorCalibration(BaseModel):
     evaluator: str
     sample_count: int
     agreement_rate: float
-    false_positive_rate: float  # evaluator flags fail, human says pass
-    false_negative_rate: float  # evaluator says pass, human flags issues
+    precision: float   # of evaluator's failure flags, how many were correct
+    recall: float      # of actual failures, how many did evaluator catch
+    f1: float
+    false_positive_rate: float  # evaluator flags issue, human says fine
+    false_negative_rate: float  # evaluator misses issue human caught
 
 
 class BlindSpot(BaseModel):
