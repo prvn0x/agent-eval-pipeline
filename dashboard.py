@@ -1,9 +1,10 @@
+import uuid
 import requests
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-API = "https://agent-eval-pipeline.onrender.com"
+API = "http://localhost:8000"
 
 st.set_page_config(
     page_title="Agent Eval Pipeline",
@@ -86,7 +87,7 @@ if page == "Overview":
     st.subheader("Quick test — ingest a sample conversation")
 
     sample = {
-        "conversation_id": "demo_001",
+        "conversation_id": f"demo_{uuid.uuid4().hex[:8]}",
         "agent_version": "v1.0",
         "turns": [
             {"turn_id": 1, "role": "user", "content": "Book me a flight to Delhi next Monday",
